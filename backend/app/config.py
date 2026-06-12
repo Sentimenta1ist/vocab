@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,6 +7,21 @@ class Settings(BaseSettings):
 
     # Required
     database_url: str
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalise_db_url(cls, v: str) -> str:
+        # Coolify (and Heroku) emit "postgres://" or "postgres+asyncpg://"
+        # SQLAlchemy requires the full "postgresql+asyncpg://" prefix.
+        replacements = [
+            ("postgres+asyncpg://", "postgresql+asyncpg://"),
+            ("postgres://",         "postgresql+asyncpg://"),
+            ("postgresql://",       "postgresql+asyncpg://"),
+        ]
+        for old, new in replacements:
+            if v.startswith(old):
+                return new + v[len(old):]
+        return v
     google_api_key: str
     jwt_secret: str
 

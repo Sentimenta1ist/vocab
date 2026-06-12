@@ -6,7 +6,7 @@ function setToken(t)         { localStorage.setItem(TOKEN_KEY, t); }
 function clearToken()        { localStorage.removeItem(TOKEN_KEY); }
 
 // ── API ────────────────────────────────────────────────────────────────────
-const API = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+const API = (window.__API_URL__ || '/api').replace(/\/$/, '');
 
 async function apiFetch(method, path, body) {
   const opts = { method, headers: {} };

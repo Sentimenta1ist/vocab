@@ -116,6 +116,8 @@ async def generate_card(word: str) -> CardContent:
         raise HTTPException(status_code=502, detail="AI service returned an unexpected response.")
 
     except Exception as exc:
+        if "429" in str(exc) or "quota" in str(exc).lower() or "RESOURCE_EXHAUSTED" in str(exc):
+            raise HTTPException(status_code=429, detail="Google AI free quota exceeded. Try again tomorrow.")
         logger.error("Gemini API error generating card for '%s': %s", word, exc)
         raise HTTPException(status_code=502, detail="AI service error. Please try again.")
 
@@ -149,5 +151,7 @@ async def regenerate_field(word: str, field: str) -> str:
         raise HTTPException(status_code=502, detail="AI service returned an unexpected response.")
 
     except Exception as exc:
+        if "429" in str(exc) or "quota" in str(exc).lower() or "RESOURCE_EXHAUSTED" in str(exc):
+            raise HTTPException(status_code=429, detail="Google AI free quota exceeded. Try again tomorrow.")
         logger.error("Gemini API error regenerating '%s' for '%s': %s", field, word, exc)
         raise HTTPException(status_code=502, detail="AI service error. Please try again.")

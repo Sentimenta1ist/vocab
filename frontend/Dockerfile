@@ -1,13 +1,13 @@
 FROM nginx:1.27-alpine
 
-COPY index.html app.js style.css manifest.json sw.js config.js /usr/share/nginx/html/
+COPY index.html app.js style.css manifest.json sw.js /usr/share/nginx/html/
 COPY icons/ /usr/share/nginx/html/icons/
-
-# nginx.conf (no proxy — browser calls backend directly)
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 
-# Injects BACKEND_URL into config.js at container start
-COPY 40-inject-config.sh /docker-entrypoint.d/40-inject-config.sh
-RUN chmod +x /docker-entrypoint.d/40-inject-config.sh
+# Bake BACKEND_URL into config.js at build time.
+# In Coolify: set BACKEND_URL=https://vocab-api.qear.net and enable "Available at Buildtime".
+# Locally: empty string → API calls use relative /api (FastAPI serves everything).
+ARG BACKEND_URL=
+RUN echo "window.VOCAB_BACKEND = '${BACKEND_URL}';" > /usr/share/nginx/html/config.js
 
 EXPOSE 80

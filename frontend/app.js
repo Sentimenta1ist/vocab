@@ -8,9 +8,11 @@ function setToken(t)         { localStorage.setItem(TOKEN_KEY, t); }
 function clearToken()        { localStorage.removeItem(TOKEN_KEY); }
 
 // ── API ────────────────────────────────────────────────────────────────────
-// window.VOCAB_BACKEND is injected at container start via config.js + envsubst.
-// Empty string = local dev (relative /api). Full URL = production separate deployment.
-const API = (window.VOCAB_BACKEND || '') + '/api';
+// Production: backend lives on vocab-api.qear.net, frontend on vocab.qear.net.
+// Local dev: FastAPI serves everything, so relative /api works.
+const API = window.location.hostname === 'vocab.qear.net'
+  ? 'https://vocab-api.qear.net/api'
+  : '/api';
 
 async function apiFetch(method, path, body) {
   const opts = { method, headers: {} };

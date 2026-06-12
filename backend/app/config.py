@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     port: int = 8000
     frontend_dir: str = "/app/frontend"
     jwt_expire_days: int = 30
+    # Comma-separated allowed origins for CORS, e.g. "https://vocab.example.com,https://app.example.com"
+    # Use "*" to allow any origin (fine for a personal app behind JWT auth)
+    cors_origins: str = "*"
 
 
 settings = Settings()

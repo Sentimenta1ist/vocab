@@ -1,8 +1,10 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncIterator
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
@@ -23,6 +25,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Vocab SRS", version="1.0.0", lifespan=lifespan)
 
+# CORS — needed when frontend and backend are separate Coolify services
+origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(auth_router, prefix="/api")
 app.include_router(cards_router, prefix="/api")
 app.include_router(review_router, prefix="/api")
@@ -33,5 +45,9 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
-# Static frontend — must be mounted last so API routes take priority
-app.mount("/", StaticFiles(directory=settings.frontend_dir, html=True), name="frontend")
+# Serve bundled frontend only when the directory exists.
+# When frontend is deployed as a separate Coolify service this directory
+# won't be present and the backend runs as API-only.
+_frontend = Path(settings.frontend_dir)
+if _frontend.exists():
+    app.mount("/", StaticFiles(directory=str(_frontend), html=True), name="frontend")

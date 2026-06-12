@@ -599,10 +599,6 @@ function fmtDate(iso) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-// ── Service Worker ─────────────────────────────────────────────────────────
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
-}
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 if (getToken()) {

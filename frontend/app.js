@@ -232,20 +232,20 @@ function viewStudy() {
   const examplesHtml = step >= 1 ? `
     <div class="study-section examples">
       <div class="study-section-label">Examples</div>
-      <p>${esc(card.example_1)}</p>
-      <p>${esc(card.example_2)}</p>
+      <p>${highlight(card.example_1, card.word)}</p>
+      <p>${highlight(card.example_2, card.word)}</p>
     </div>` : '';
 
   const explanationHtml = step >= 2 ? `
     <div class="study-section">
       <div class="study-section-label">Meaning</div>
-      <p>${esc(card.explanation)}</p>
+      <p>${highlight(card.explanation, card.word)}</p>
     </div>` : '';
 
   const translationHtml = step >= 3 ? `
     <div class="study-section">
       <div class="study-section-label">Translation</div>
-      <p>${esc(card.translation)}</p>
+      <p>${highlight(card.translation, card.word)}</p>
     </div>` : '';
 
   const tapHint = step < 3 ? `<div class="tap-hint" data-action="reveal">tap to reveal ↓</div>` : '';
@@ -581,6 +581,12 @@ function esc(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function highlight(text, word) {
+  if (!text || !word) return esc(text);
+  const re = new RegExp(esc(word).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  return esc(text).replace(re, m => `<span class="word-hi">${m}</span>`);
 }
 
 function fmtDate(iso) {

@@ -8,7 +8,9 @@ function setToken(t)         { localStorage.setItem(TOKEN_KEY, t); }
 function clearToken()        { localStorage.removeItem(TOKEN_KEY); }
 
 // ── API ────────────────────────────────────────────────────────────────────
-const API = '/api';
+// window.VOCAB_BACKEND is injected at container start via config.js + envsubst.
+// Empty string = local dev (relative /api). Full URL = production separate deployment.
+const API = (window.VOCAB_BACKEND || '') + '/api';
 
 async function apiFetch(method, path, body) {
   const opts = { method, headers: {} };

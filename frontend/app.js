@@ -128,13 +128,14 @@ function viewAuth() {
       </h2>
 
       <div class="field-block">
-        <input id="auth-email" type="email" placeholder="Email"
-               autocomplete="${isLogin ? 'email' : 'email'}"
-               inputmode="email" autocapitalize="none" />
+        <label class="input-label" for="auth-email">Email</label>
+        <input id="auth-email" type="email" placeholder="you@example.com"
+               autocomplete="email" inputmode="email" autocapitalize="none" />
       </div>
       <div class="field-block">
+        <label class="input-label" for="auth-password">Password</label>
         <input id="auth-password" type="password"
-               placeholder="${isLogin ? 'Password' : 'Password (8+ characters)'}"
+               placeholder="${isLogin ? '••••••••' : 'At least 8 characters'}"
                autocomplete="${isLogin ? 'current-password' : 'new-password'}" />
       </div>
 

@@ -18,11 +18,12 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg:      #111827;
-    --surface: #1F2937;
-    --border:  #374151;
-    --text:    #F9FAFB;
-    --muted:   #9CA3AF;
+    --bg:       #111827;
+    --surface:  #1F2937;
+    --border:   #4B5563;
+    --text:     #F9FAFB;
+    --muted:    #9CA3AF;
+    --input-bg: #111827;
   }
 }
 
@@ -163,7 +164,7 @@ input[type="text"],
 input[type="email"],
 input[type="password"],
 textarea {
-  background: var(--surface);
+  background: var(--input-bg, var(--surface));
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
   padding: 0.65rem 0.85rem;
@@ -171,7 +172,7 @@ textarea {
   color: var(--text);
   width: 100%;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
   -webkit-appearance: none;
 }
 
@@ -180,6 +181,16 @@ input[type="email"]:focus,
 input[type="password"]:focus,
 textarea:focus {
   border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+
+.input-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+  letter-spacing: 0.02em;
 }
 
 textarea {

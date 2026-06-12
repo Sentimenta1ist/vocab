@@ -159,7 +159,10 @@ body {
   margin-bottom: 0.75rem;
 }
 
-input[type="text"], textarea {
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea {
   background: var(--surface);
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
@@ -172,7 +175,10 @@ input[type="text"], textarea {
   -webkit-appearance: none;
 }
 
-input[type="text"]:focus, textarea:focus {
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+textarea:focus {
   border-color: var(--blue);
 }
 

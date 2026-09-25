@@ -60,6 +60,7 @@ const state = {
   // cards list
   listCategory: null,
   listCards: [],
+  cardSearch: '',
   // card detail
   detailCard: null,
   detailEdits: {},
@@ -389,24 +390,57 @@ function viewCards() {
       ${c.label}
     </button>`).join('');
 
-  const items = state.listCards.length
-    ? state.listCards.map(c => `
-      <div class="row" data-action="open-card" data-id="${c.id}">
-        <div class="row-main">
-          <div class="row-title">${esc(c.word)}</div>
-        </div>
-        <span class="dot dot-${c.category}"></span>
-      </div>`).join('')
-    : `<div class="empty"><p>No cards here yet.</p></div>`;
-
   return `
   <div class="screen screen--tabbed">
     <div class="topbar">
       <h1>Cards</h1>
     </div>
+    <div class="field-block">
+      <input id="cards-search" class="input" type="search" placeholder="Search word or translation…"
+             autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(state.cardSearch)}" />
+    </div>
     <div class="chip-row" style="margin-bottom:0.875rem">${tabs}</div>
-    <div class="list">${items}</div>
+    <div class="list" id="cards-list">${buildCardsListHtml()}</div>
   </div>`;
+}
+
+function dueLabel(c) {
+  if (c.category === 'new') return 'new';
+  if (!c.next_review_at) return '';
+  const days = Math.round((new Date(c.next_review_at) - new Date()) / 86400000);
+  if (days <= 0) return 'due today';
+  if (days === 1) return 'due tomorrow';
+  return `due in ${days}d`;
+}
+
+function buildCardsListHtml() {
+  const q = state.cardSearch.trim().toLowerCase();
+  const filtered = q
+    ? state.listCards.filter(c => c.word.toLowerCase().includes(q) || c.translation.toLowerCase().includes(q))
+    : state.listCards;
+
+  if (filtered.length === 0) {
+    return q
+      ? `<div class="empty"><p>No matches for "${esc(state.cardSearch.trim())}".</p></div>`
+      : `<div class="empty"><p>No cards here yet.</p></div>`;
+  }
+
+  return filtered.map(c => `
+    <div class="row" data-action="open-card" data-id="${c.id}">
+      <div class="row-main">
+        <div class="row-title">${esc(c.word)}</div>
+        <div class="row-sub">${esc(c.translation)}</div>
+      </div>
+      <div class="row-meta-row">
+        <span class="dot dot-${c.category}"></span>
+        <span class="row-meta">${dueLabel(c)}</span>
+      </div>
+    </div>`).join('');
+}
+
+function renderCardsList() {
+  const el = document.getElementById('cards-list');
+  if (el) el.innerHTML = buildCardsListHtml();
 }
 
 // ── View: Card detail / edit ───────────────────────────────────────────────
@@ -478,6 +512,10 @@ function handleInput(e) {
     e.target.classList.remove('input-error');
     const hint = document.getElementById('add-hint');
     if (hint) hint.hidden = true;
+  }
+  if (e.target.id === 'cards-search') {
+    state.cardSearch = e.target.value;
+    renderCardsList();
   }
 }
 

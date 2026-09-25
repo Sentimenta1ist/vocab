@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.llm import gemini
+from app.llm import client as llm
 from app.models import Card
 from app.schemas import CardUpdate, StatsResponse
 from app.services import srs_service
@@ -47,7 +47,7 @@ async def create_card(db: AsyncSession, word: str, user_id: UUID) -> Card:
             detail=f"You already have a card for '{normalized}'. Open it to study or edit.",
         )
 
-    content = await gemini.generate_card(normalized)
+    content = await llm.generate_card(normalized)
 
     card = Card(
         user_id=user_id,
@@ -129,13 +129,13 @@ async def regenerate_card(
     card = await _get_or_404(db, card_id, user_id)
 
     if field is None:
-        content = await gemini.generate_card(card.word)
+        content = await llm.generate_card(card.word)
         card.example_1 = content.example_1
         card.example_2 = content.example_2
         card.explanation = content.explanation
         card.translation = content.translation
     else:
-        new_value = await gemini.regenerate_field(card.word, field)
+        new_value = await llm.regenerate_field(card.word, field)
         setattr(card, field, new_value)
 
     card.touch()

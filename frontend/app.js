@@ -63,7 +63,12 @@ const state = {
   // card detail
   detailCard: null,
   detailEdits: {},
+  // home: recently-added cards, optimistic in-flight/failed adds prepended
+  recentCards: [],
+  pendingAdds: [], // { localId, word, status: 'pending'|'error', error? }
 };
+
+let pendingAddSeq = 0;
 
 // ── Navigation ─────────────────────────────────────────────────────────────
 // Real history entries back the SPA's navigation stack. Tab-bar destinations
@@ -111,7 +116,11 @@ async function refresh() {
 }
 
 // ── Data loaders ───────────────────────────────────────────────────────────
-async function loadHome()  { state.stats = await api.stats(); }
+async function loadHome() {
+  const [stats, allCards] = await Promise.all([api.stats(), api.list()]);
+  state.stats = stats;
+  state.recentCards = allCards.slice(0, 8); // list() is already created_at desc
+}
 async function loadStudy() {
   if (state.dueCards.length === 0) {
     state.dueCards = await api.due();
@@ -231,14 +240,59 @@ function viewHome() {
       Study${due ? ` · ${due} cards` : ''}
     </button>
 
-    <div class="field-block" style="margin-top:1rem">
-      <div style="display:flex;gap:0.5rem">
+    <div class="section-title" style="margin-top:1.25rem">Recently added</div>
+    <div class="list" id="recent-list">${buildRecentListHtml()}</div>
+
+    <div class="composer">
+      <div style="flex:1">
         <input id="add-input" class="input" type="text" placeholder="Add a word…" autocomplete="off"
                autocapitalize="none" spellcheck="false" />
-        <button class="btn btn-secondary" data-action="add-word" style="white-space:nowrap">Add</button>
+        <div class="input-hint error" id="add-hint" hidden>Enter a word first</div>
       </div>
+      <button class="btn btn-primary" data-action="add-word" style="white-space:nowrap">Add</button>
     </div>
   </div>`;
+}
+
+function buildRecentListHtml() {
+  const pending = state.pendingAdds.map(renderPendingRow);
+  const done = state.recentCards.map(renderCardRow);
+  const items = pending.concat(done).slice(0, 8);
+  return items.length ? items.join('') : `<div class="empty"><p>No words yet — add your first one below.</p></div>`;
+}
+
+function renderCardRow(c) {
+  return `
+  <div class="row" data-action="open-card" data-id="${c.id}">
+    <div class="row-main"><div class="row-title">${esc(c.word)}</div></div>
+    <span class="dot dot-${c.category}"></span>
+  </div>`;
+}
+
+function renderPendingRow(entry) {
+  if (entry.status === 'error') {
+    return `
+    <div class="row row-error">
+      <div class="row-main">
+        <div class="row-title">${esc(entry.word)}</div>
+        <div class="row-sub">${esc(entry.error)}</div>
+      </div>
+      <div class="row-actions">
+        <button class="btn btn-sm btn-secondary" data-action="retry-add" data-local-id="${entry.localId}">Retry</button>
+        <button class="btn-icon" data-action="dismiss-add" data-local-id="${entry.localId}">✕</button>
+      </div>
+    </div>`;
+  }
+  return `
+  <div class="row row-pending">
+    <div class="row-main"><div class="row-title">${esc(entry.word)}</div></div>
+    <div class="spinner"></div>
+  </div>`;
+}
+
+function renderRecentList() {
+  const el = document.getElementById('recent-list');
+  if (el) el.innerHTML = buildRecentListHtml();
 }
 
 // ── View: Study ────────────────────────────────────────────────────────────
@@ -407,6 +461,11 @@ function handleInput(e) {
   if (e.target.dataset.field && e.target.matches('textarea')) {
     state.detailEdits[e.target.dataset.field] = e.target.value;
   }
+  if (e.target.id === 'add-input') {
+    e.target.classList.remove('input-error');
+    const hint = document.getElementById('add-hint');
+    if (hint) hint.hidden = true;
+  }
 }
 
 function handleKeydown(e) {
@@ -439,7 +498,9 @@ async function handleClick(e) {
       case 'start-study':    goTab('study'); break;
       case 'back':           history.back(); break;
 
-      case 'add-word':       await doAddWord(); break;
+      case 'add-word':       doAddWord(); return; // sync: clears+refocuses input immediately, add runs in background
+      case 'retry-add':      retryAdd(Number(el.dataset.localId)); return;
+      case 'dismiss-add':    dismissAdd(Number(el.dataset.localId)); return;
 
       case 'reveal':
         state.revealStep++;
@@ -493,21 +554,70 @@ async function doAuth() {
   }
 }
 
-async function doAddWord() {
+function doAddWord() {
   const input = document.getElementById('add-input');
   const word = input ? input.value.trim() : '';
-  if (!word) return;
+  const hint = document.getElementById('add-hint');
 
-  showLoading(`Generating card for "${word}"…`);
-  try {
-    const card = await api.create(word);
-    hideLoading();
-    pushRoute('detail', { detailCard: card, detailEdits: {} });
-    showToast(`"${card.word}" added!`, 'success');
-  } catch (err) {
-    hideLoading();
-    throw err;
+  if (!word) {
+    input?.classList.add('input-error');
+    if (hint) hint.hidden = false;
+    input?.focus();
+    return;
   }
+
+  input.classList.remove('input-error');
+  if (hint) hint.hidden = true;
+  input.value = '';
+  input.focus(); // stays focused — renderRecentList() below only touches #recent-list, never the composer
+
+  startAdd(word);
+}
+
+function startAdd(word) {
+  const localId = ++pendingAddSeq;
+  state.pendingAdds.unshift({ localId, word, status: 'pending' });
+  renderRecentList();
+
+  api.create(word).then(card => {
+    state.pendingAdds = state.pendingAdds.filter(p => p.localId !== localId);
+    state.recentCards = [card, ...state.recentCards.filter(c => c.id !== card.id)];
+    renderRecentList();
+    showToast(`"${card.word}" added`, 'success', {
+      actionLabel: 'Edit',
+      onAction: () => pushRoute('detail', { detailCard: card, detailEdits: {} }),
+    });
+  }).catch(err => {
+    const entry = state.pendingAdds.find(p => p.localId === localId);
+    if (entry) { entry.status = 'error'; entry.error = err.message; }
+    renderRecentList();
+  });
+}
+
+function retryAdd(localId) {
+  const entry = state.pendingAdds.find(p => p.localId === localId);
+  if (!entry) return;
+  entry.status = 'pending';
+  entry.error = undefined;
+  renderRecentList();
+  api.create(entry.word).then(card => {
+    state.pendingAdds = state.pendingAdds.filter(p => p.localId !== localId);
+    state.recentCards = [card, ...state.recentCards.filter(c => c.id !== card.id)];
+    renderRecentList();
+    showToast(`"${card.word}" added`, 'success', {
+      actionLabel: 'Edit',
+      onAction: () => pushRoute('detail', { detailCard: card, detailEdits: {} }),
+    });
+  }).catch(err => {
+    entry.status = 'error';
+    entry.error = err.message;
+    renderRecentList();
+  });
+}
+
+function dismissAdd(localId) {
+  state.pendingAdds = state.pendingAdds.filter(p => p.localId !== localId);
+  renderRecentList();
 }
 
 async function doRate(rating) {
@@ -572,16 +682,27 @@ async function doDeleteCard() {
 }
 
 // ── UI helpers ─────────────────────────────────────────────────────────────
-function showToast(msg, type = 'info') {
+function showToast(msg, type = 'info', opts = {}) {
   document.querySelectorAll('.toast-stack').forEach(t => t.remove());
+  const { actionLabel, onAction, duration = actionLabel ? 5000 : 3000 } = opts;
+
   const stack = document.createElement('div');
   stack.className = `toast-stack ${['home', 'study', 'cards'].includes(state.view) ? '' : 'toast-stack--flush'}`;
+
   const t = document.createElement('div');
   t.className = `toast toast-${type}`;
-  t.innerHTML = `<span class="toast-msg">${esc(msg)}</span>`;
+  t.innerHTML = `<span class="toast-msg">${esc(msg)}</span>` +
+    (actionLabel ? `<button class="toast-action">${esc(actionLabel)}</button>` : '');
   stack.appendChild(t);
   document.body.appendChild(stack);
-  setTimeout(() => stack.remove(), 3000);
+
+  if (actionLabel && onAction) {
+    t.querySelector('.toast-action').addEventListener('click', () => {
+      stack.remove();
+      onAction();
+    });
+  }
+  setTimeout(() => stack.remove(), duration);
 }
 
 function showLoading(msg = 'Loading…') {

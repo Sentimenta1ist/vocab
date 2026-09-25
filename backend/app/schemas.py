@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 # ── Auth ───────────────────────────────────────────────────────────────────
@@ -33,6 +33,13 @@ class UserResponse(BaseModel):
 
 class CardCreate(BaseModel):
     word: str = Field(..., min_length=1, max_length=200)
+
+    @field_validator("word", mode="before")
+    @classmethod
+    def strip_word(cls, v: object) -> object:
+        # Strip before length validation so a whitespace-only value (e.g. " ")
+        # fails min_length instead of sneaking through as a blank card.
+        return v.strip() if isinstance(v, str) else v
 
 
 class CardUpdate(BaseModel):

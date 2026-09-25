@@ -19,8 +19,7 @@ async function apiFetch(method, path, body) {
   const res = await fetch(`${API}${path}`, opts);
   if (res.status === 401) {
     clearToken();
-    Object.assign(state, { view: 'auth', authMode: 'login' });
-    render();
+    replaceRoute('auth', { authMode: 'login' });
     throw new Error('Session expired — please log in again.');
   }
   if (res.status === 204) return null;
@@ -67,10 +66,34 @@ const state = {
 };
 
 // ── Navigation ─────────────────────────────────────────────────────────────
-async function navigate(view, payload = {}) {
+// Real history entries back the SPA's navigation stack. Tab-bar destinations
+// (home/study/cards) use replaceState — switching tabs never grows the stack.
+// Anything "pushed" on top of a tab (currently just the detail screen) uses
+// pushState, so the platform back gesture / button returns to whichever tab
+// screen it was opened from, and never closes the installed PWA by surprise.
+
+function pushRoute(view, payload = {}) {
   Object.assign(state, { view, ...payload });
-  await refresh();
+  history.pushState({ view, payload }, '', `#${view}`);
+  refresh();
 }
+
+function replaceRoute(view, payload = {}) {
+  Object.assign(state, { view, ...payload });
+  history.replaceState({ view, payload }, '', `#${view}`);
+  refresh();
+}
+
+function goTab(view) {
+  const payload = view === 'cards' ? { listCategory: null } : {};
+  replaceRoute(view, payload);
+}
+
+window.addEventListener('popstate', (e) => {
+  if (!e.state) return; // fell off the bottom of our stack — let the platform handle it
+  Object.assign(state, { view: e.state.view, ...e.state.payload });
+  refresh();
+});
 
 async function refresh() {
   try {
@@ -100,53 +123,70 @@ async function loadStudy() {
 async function loadCards() { state.listCards = await api.list(state.listCategory); }
 
 // ── Render ─────────────────────────────────────────────────────────────────
+const TABS = [
+  { view: 'home',  icon: '⌂', label: 'Home' },
+  { view: 'study', icon: '▷', label: 'Study' },
+  { view: 'cards', icon: '▤', label: 'Cards' },
+];
+
 function render() {
   const root = document.getElementById('app');
+  const showTabbar = ['home', 'study', 'cards'].includes(state.view);
+  let html;
   switch (state.view) {
-    case 'auth':   root.innerHTML = viewAuth();   break;
-    case 'home':   root.innerHTML = viewHome();   break;
-    case 'study':  root.innerHTML = viewStudy();  break;
-    case 'cards':  root.innerHTML = viewCards();  break;
-    case 'detail': root.innerHTML = viewDetail(); break;
+    case 'auth':   html = viewAuth();   break;
+    case 'home':   html = viewHome();   break;
+    case 'study':  html = viewStudy();  break;
+    case 'cards':  html = viewCards();  break;
+    case 'detail': html = viewDetail(); break;
   }
-  attachEvents();
+  root.innerHTML = html + (showTabbar ? renderTabbar() : '');
+}
+
+function renderTabbar() {
+  return `
+  <nav class="tabbar">
+    ${TABS.map(t => `
+      <button class="tab ${state.view === t.view ? 'active' : ''}" data-action="tab" data-view="${t.view}">
+        <span class="tab-icon">${t.icon}</span>
+        <span>${t.label}</span>
+      </button>`).join('')}
+  </nav>`;
 }
 
 // ── View: Auth (login / register) ─────────────────────────────────────────
 function viewAuth() {
   const isLogin = state.authMode === 'login';
   return `
-  <div class="screen" style="justify-content:center;min-height:100dvh">
+  <div class="screen auth-screen">
     <div style="padding:0 0 2rem">
-      <h1 style="font-size:2rem;font-weight:800;margin-bottom:0.25rem">Vocab</h1>
-      <p style="color:var(--muted);font-size:0.9rem">English vocabulary · spaced repetition</p>
+      <h1 class="auth-title">Vocab</h1>
+      <p class="auth-sub">English vocabulary · spaced repetition</p>
     </div>
 
-    <div class="card" style="padding:1.5rem">
-      <h2 style="font-size:1.1rem;font-weight:700;margin-bottom:1.25rem">
-        ${isLogin ? 'Log in' : 'Create account'}
-      </h2>
+    <div class="card auth-card">
+      <h2>${isLogin ? 'Log in' : 'Create account'}</h2>
 
       <div class="field-block">
-        <label class="input-label" for="auth-email">Email</label>
-        <input id="auth-email" type="email" placeholder="you@example.com"
+        <label class="field-label" for="auth-email">Email</label>
+        <input id="auth-email" class="input" type="email" placeholder="you@example.com"
                autocomplete="email" inputmode="email" autocapitalize="none" />
       </div>
       <div class="field-block">
-        <label class="input-label" for="auth-password">Password</label>
-        <input id="auth-password" type="password"
+        <label class="field-label" for="auth-password">Password</label>
+        <input id="auth-password" class="input" type="password"
                placeholder="${isLogin ? '••••••••' : 'At least 8 characters'}"
                autocomplete="${isLogin ? 'current-password' : 'new-password'}" />
       </div>
 
-      <button class="btn btn-primary" data-action="auth-submit" style="margin-top:0.25rem">
+      <button class="btn btn-primary btn-block" data-action="auth-submit">
         ${isLogin ? 'Log in' : 'Register'}
       </button>
     </div>
 
-    <p style="text-align:center;margin-top:1.25rem;font-size:0.875rem;color:var(--muted)">
+    <p class="auth-switch">
       ${isLogin ? "Don't have an account?" : 'Already have an account?'}
-      <button class="btn-ghost" style="font-size:0.875rem" data-action="auth-toggle">
+      <button class="btn-ghost" data-action="auth-toggle">
         ${isLogin ? 'Register' : 'Log in'}
       </button>
     </p>
@@ -162,43 +202,40 @@ function viewHome() {
   const lnd = s ? s.learned : '…';
 
   return `
-  <div class="screen">
+  <div class="screen screen--tabbed">
     <div class="topbar">
-      <h1>Vocab</h1>
-      <button class="btn-ghost" data-action="go-cards">All cards</button>
-      <button class="btn-ghost" style="color:var(--muted)" data-action="logout">Log out</button>
+      <h1 style="flex:1">Vocab</h1>
+      <button class="btn-ghost" style="color:var(--text-muted);font-size:var(--fs-xs)" data-action="logout">Log out</button>
     </div>
 
-    <div class="stats">
-      <div class="stat">
-        <div class="stat-value" style="color:var(--blue)">${due}</div>
-        <div class="stat-label">Due</div>
+    <div class="stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:1rem">
+      <div class="card" style="text-align:center;padding:0.6rem 0.25rem">
+        <div style="font-size:1.4rem;font-weight:700;color:var(--due)">${due}</div>
+        <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase">Due</div>
       </div>
-      <div class="stat">
-        <div class="stat-value" style="color:#6B7280">${newC}</div>
-        <div class="stat-label">New</div>
+      <div class="card" style="text-align:center;padding:0.6rem 0.25rem">
+        <div style="font-size:1.4rem;font-weight:700">${newC}</div>
+        <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase">New</div>
       </div>
-      <div class="stat">
-        <div class="stat-value" style="color:var(--yellow)">${lrn}</div>
-        <div class="stat-label">Learning</div>
+      <div class="card" style="text-align:center;padding:0.6rem 0.25rem">
+        <div style="font-size:1.4rem;font-weight:700;color:var(--learning)">${lrn}</div>
+        <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase">Learning</div>
       </div>
-      <div class="stat">
-        <div class="stat-value" style="color:var(--green)">${lnd}</div>
-        <div class="stat-label">Learned</div>
+      <div class="card" style="text-align:center;padding:0.6rem 0.25rem">
+        <div style="font-size:1.4rem;font-weight:700;color:var(--learned)">${lnd}</div>
+        <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase">Learned</div>
       </div>
     </div>
 
-    <button class="btn btn-primary" data-action="start-study" ${!due || due === 0 ? 'disabled' : ''}>
+    <button class="btn btn-primary btn-block" data-action="start-study" ${!due || due === 0 ? 'disabled' : ''}>
       Study${due ? ` · ${due} cards` : ''}
     </button>
 
-    <hr class="divider" style="margin-top:1rem" />
-
-    <div class="field-block" style="margin-top:0.25rem">
-      <div class="input-row">
-        <input id="add-input" type="text" placeholder="Add a word…" autocomplete="off"
+    <div class="field-block" style="margin-top:1rem">
+      <div style="display:flex;gap:0.5rem">
+        <input id="add-input" class="input" type="text" placeholder="Add a word…" autocomplete="off"
                autocapitalize="none" spellcheck="false" />
-        <button class="btn btn-outline btn-sm" data-action="add-word" style="white-space:nowrap">Add</button>
+        <button class="btn btn-secondary" data-action="add-word" style="white-space:nowrap">Add</button>
       </div>
     </div>
   </div>`;
@@ -212,15 +249,12 @@ function viewStudy() {
 
   if (cards.length === 0) {
     return `
-    <div class="screen">
-      <div class="topbar">
-        <button class="btn-ghost" data-action="go-home">← Home</button>
-      </div>
+    <div class="screen screen--tabbed">
       <div class="complete-screen">
         <div class="big-emoji">🎉</div>
         <h2>Session complete!</h2>
         <p>You reviewed ${done} card${done !== 1 ? 's' : ''}.</p>
-        <button class="btn btn-primary" style="margin-top:1rem;max-width:240px" data-action="go-home">Back to home</button>
+        <button class="btn btn-primary" style="margin-top:1rem;max-width:240px" data-action="tab" data-view="home">Back to home</button>
       </div>
     </div>`;
   }
@@ -252,19 +286,16 @@ function viewStudy() {
 
   const ratingHtml = step >= 3 ? `
     <div class="rating-row">
-      <button class="btn btn-danger"  data-action="rate" data-rating="again">Again</button>
-      <button class="btn btn-warning" data-action="rate" data-rating="good">Good</button>
-      <button class="btn btn-success" data-action="rate" data-rating="easy">Easy</button>
+      <button class="btn rating-again"  data-action="rate" data-rating="again">Again</button>
+      <button class="btn rating-good"   data-action="rate" data-rating="good">Good</button>
+      <button class="btn rating-easy"   data-action="rate" data-rating="easy">Easy</button>
     </div>` : '';
 
   return `
-  <div class="screen">
-    <div class="topbar">
-      <button class="btn-ghost" data-action="go-home">← Home</button>
-      <div class="study-progress" style="flex:1;margin-left:0.75rem">
-        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-        <span class="progress-text">${done}/${total}</span>
-      </div>
+  <div class="screen screen--tabbed">
+    <div class="study-progress">
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <span class="progress-text">${done}/${total}</span>
     </div>
 
     <div class="study-word">${esc(card.word)}</div>
@@ -286,28 +317,28 @@ function viewCards() {
   ];
 
   const tabs = cats.map(c => `
-    <button class="tab ${state.listCategory === c.key ? 'active' : ''}"
+    <button class="chip ${state.listCategory === c.key ? 'active' : ''}"
             data-action="filter" data-cat="${c.key ?? ''}">
       ${c.label}
     </button>`).join('');
 
   const items = state.listCards.length
     ? state.listCards.map(c => `
-      <div class="word-item" data-action="open-card" data-id="${c.id}">
-        <div class="word-item-word">${esc(c.word)}</div>
-        <span class="badge badge-${c.category}">${c.category}</span>
+      <div class="row" data-action="open-card" data-id="${c.id}">
+        <div class="row-main">
+          <div class="row-title">${esc(c.word)}</div>
+        </div>
+        <span class="dot dot-${c.category}"></span>
       </div>`).join('')
     : `<div class="empty"><p>No cards here yet.</p></div>`;
 
   return `
-  <div class="screen">
+  <div class="screen screen--tabbed">
     <div class="topbar">
-      <button class="btn-ghost" data-action="go-home">← Home</button>
-      <h1 style="flex:1;text-align:center">Cards</h1>
-      <span style="width:4rem"></span>
+      <h1>Cards</h1>
     </div>
-    <div class="filter-tabs">${tabs}</div>
-    ${items}
+    <div class="chip-row" style="margin-bottom:0.875rem">${tabs}</div>
+    <div class="list">${items}</div>
   </div>`;
 }
 
@@ -320,15 +351,13 @@ function viewDetail() {
     const val = state.detailEdits[key] ?? c[key];
     return `
     <div class="field-block">
-      <div class="field-label">
-        ${label}
-        <div class="field-actions">
-          <button class="btn btn-outline btn-sm" data-action="regen-field" data-field="${key}">↺ Regen</button>
-        </div>
+      <div class="detail-field-head">
+        <div class="detail-field-label">${label}</div>
+        <button class="btn btn-ghost btn-sm" data-action="regen-field" data-field="${key}">↺ Regen</button>
       </div>
-      <div class="edit-area-wrap">
-        <textarea rows="2" data-field="${key}" class="field-textarea">${esc(val)}</textarea>
-        <div class="spinner-inline" id="spin-${key}"></div>
+      <div style="position:relative">
+        <textarea rows="2" data-field="${key}" class="input">${esc(val)}</textarea>
+        <div class="spinner" id="spin-${key}" style="display:none;position:absolute;right:0.65rem;top:0.65rem"></div>
       </div>
     </div>`;
   };
@@ -336,14 +365,14 @@ function viewDetail() {
   return `
   <div class="screen">
     <div class="topbar">
-      <button class="btn-ghost" data-action="go-back-cards">← Cards</button>
-      <h1 style="flex:1;text-align:center">${esc(c.word)}</h1>
-      <button class="btn-ghost" style="color:var(--red)" data-action="delete-card">Delete</button>
+      <button class="btn-icon" data-action="back">←</button>
+      <h1>${esc(c.word)}</h1>
+      <button class="btn-ghost" style="color:var(--danger)" data-action="delete-card">Delete</button>
     </div>
 
     <div class="card" style="margin-bottom:1rem">
-      <div class="stat-label" style="margin-bottom:0.25rem">Status</div>
-      <span class="badge badge-${c.category}">${c.category}</span>
+      <div class="field-label" style="margin-bottom:0.25rem">Status</div>
+      <span class="dot dot-${c.category}" style="display:inline-block;margin-right:6px"></span>${c.category}
       ${c.next_review_at ? ` · next ${fmtDate(c.next_review_at)}` : ''}
       · interval ${c.interval_days}d · ease ${c.ease_factor.toFixed(2)}
     </div>
@@ -354,39 +383,41 @@ function viewDetail() {
     ${field('translation', 'Russian translation')}
 
     <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
-      <button class="btn btn-outline" style="flex:1" data-action="regen-all">↺ Regenerate all</button>
+      <button class="btn btn-secondary" style="flex:1" data-action="regen-all">↺ Regenerate all</button>
       <button class="btn btn-primary" style="flex:1" data-action="save-card">Save</button>
     </div>
   </div>`;
 }
 
 // ── Events ─────────────────────────────────────────────────────────────────
-function attachEvents() {
-  document.getElementById('app').addEventListener('click', handleClick, { once: true, capture: false });
-  document.getElementById('app').addEventListener('input', handleInput);
-
-  // Enter key on add-word input
-  const addInput = document.getElementById('add-input');
-  if (addInput) {
-    addInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAddWord(); });
-  }
-
-  // Enter key on auth form
-  const authPassword = document.getElementById('auth-password');
-  if (authPassword) {
-    authPassword.addEventListener('keydown', e => { if (e.key === 'Enter') doAuth(); });
-  }
+// A single delegated listener attached once at boot. Screens are re-rendered
+// via innerHTML, but #app itself is never replaced, so this keeps working
+// across every render without needing to be re-attached (the previous
+// `{ once: true }` + re-attach-on-every-click pattern was fragile: any branch
+// that forgot to call attachEvents() again would silently stop responding to
+// clicks until the next full render).
+function initEvents() {
+  const app = document.getElementById('app');
+  app.addEventListener('click', handleClick);
+  app.addEventListener('input', handleInput);
+  app.addEventListener('keydown', handleKeydown);
 }
 
 function handleInput(e) {
-  if (e.target.dataset.field && e.target.classList.contains('field-textarea')) {
+  if (e.target.dataset.field && e.target.matches('textarea')) {
     state.detailEdits[e.target.dataset.field] = e.target.value;
   }
 }
 
+function handleKeydown(e) {
+  if (e.key !== 'Enter') return;
+  if (e.target.id === 'add-input') { doAddWord(); return; }
+  if (e.target.id === 'auth-password') { doAuth(); return; }
+}
+
 async function handleClick(e) {
   const el = e.target.closest('[data-action]');
-  if (!el) { attachEvents(); return; }
+  if (!el) return;
 
   const action = el.dataset.action;
 
@@ -396,26 +427,23 @@ async function handleClick(e) {
       case 'auth-toggle':
         state.authMode = state.authMode === 'login' ? 'register' : 'login';
         render();
-        attachEvents();
         return;
 
       case 'logout':
         clearToken();
         state.dueCards = [];
-        await navigate('auth', { authMode: 'login' });
+        replaceRoute('auth', { authMode: 'login' });
         break;
 
-      case 'go-home':        state.dueCards = []; await navigate('home'); break;
-      case 'go-cards':       await navigate('cards', { listCategory: null }); break;
-      case 'go-back-cards':  await navigate('cards'); break;
-      case 'start-study':    await navigate('study'); break;
+      case 'tab':            goTab(el.dataset.view); break;
+      case 'start-study':    goTab('study'); break;
+      case 'back':           history.back(); break;
 
       case 'add-word':       await doAddWord(); break;
 
       case 'reveal':
         state.revealStep++;
         render();
-        attachEvents();
         return;
 
       case 'rate':           await doRate(el.dataset.rating); break;
@@ -425,17 +453,12 @@ async function handleClick(e) {
         state.listCategory = cat;
         await loadCards();
         render();
-        attachEvents();
         return;
       }
 
       case 'open-card': {
         const card = await api.get(el.dataset.id);
-        state.detailCard = card;
-        state.detailEdits = {};
-        state.view = 'detail';
-        render();
-        attachEvents();
+        pushRoute('detail', { detailCard: card, detailEdits: {} });
         return;
       }
 
@@ -446,9 +469,8 @@ async function handleClick(e) {
     }
   } catch (err) {
     showToast(err.message, 'error');
+    render();
   }
-
-  attachEvents();
 }
 
 // ── Actions ────────────────────────────────────────────────────────────────
@@ -464,7 +486,7 @@ async function doAuth() {
       : await api.register(email, password);
     setToken(access_token);
     hideLoading();
-    await navigate('home');
+    replaceRoute('home');
   } catch (err) {
     hideLoading();
     throw err;
@@ -480,10 +502,7 @@ async function doAddWord() {
   try {
     const card = await api.create(word);
     hideLoading();
-    state.detailCard = card;
-    state.detailEdits = {};
-    state.view = 'detail';
-    render();
+    pushRoute('detail', { detailCard: card, detailEdits: {} });
     showToast(`"${card.word}" added!`, 'success');
   } catch (err) {
     hideLoading();
@@ -549,17 +568,20 @@ async function doDeleteCard() {
   if (!confirm(`Delete "${state.detailCard.word}"? This cannot be undone.`)) return;
   await api.del(state.detailCard.id);
   showToast('Deleted', 'success');
-  await navigate('cards');
+  history.back();
 }
 
 // ── UI helpers ─────────────────────────────────────────────────────────────
 function showToast(msg, type = 'info') {
-  document.querySelectorAll('.toast').forEach(t => t.remove());
+  document.querySelectorAll('.toast-stack').forEach(t => t.remove());
+  const stack = document.createElement('div');
+  stack.className = `toast-stack ${['home', 'study', 'cards'].includes(state.view) ? '' : 'toast-stack--flush'}`;
   const t = document.createElement('div');
   t.className = `toast toast-${type}`;
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3000);
+  t.innerHTML = `<span class="toast-msg">${esc(msg)}</span>`;
+  stack.appendChild(t);
+  document.body.appendChild(stack);
+  setTimeout(() => stack.remove(), 3000);
 }
 
 function showLoading(msg = 'Loading…') {
@@ -567,7 +589,7 @@ function showLoading(msg = 'Loading…') {
   const overlay = document.createElement('div');
   overlay.className = 'loading-overlay';
   overlay.id = 'loading-overlay';
-  overlay.innerHTML = `<div class="spinner"></div><p>${esc(msg)}</p>`;
+  overlay.innerHTML = `<div class="spinner spinner-lg"></div><p>${esc(msg)}</p>`;
   document.body.appendChild(overlay);
 }
 
@@ -599,10 +621,10 @@ function fmtDate(iso) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-
 // ── Boot ───────────────────────────────────────────────────────────────────
-if (getToken()) {
-  navigate('home');
-} else {
-  navigate('auth', { authMode: 'login' });
-}
+initEvents();
+
+const initialView = getToken() ? 'home' : 'auth';
+history.replaceState({ view: initialView, payload: { authMode: 'login' } }, '', `#${initialView}`);
+Object.assign(state, { view: initialView, authMode: 'login' });
+refresh();

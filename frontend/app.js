@@ -205,42 +205,55 @@ function viewAuth() {
 // ── View: Home ─────────────────────────────────────────────────────────────
 function viewHome() {
   const s = state.stats;
-  const due = s ? s.due_session : '…';
-  const newC = s ? s.new : '…';
-  const lrn = s ? s.learning : '…';
-  const lnd = s ? s.learned : '…';
+  const loaded = !!s;
+  const due  = loaded ? s.due_session : 0;
+  const newC = loaded ? s.new      : 0;
+  const lrn  = loaded ? s.learning : 0;
+  const lnd  = loaded ? s.learned  : 0;
+  const totalCards = newC + lrn + lnd;
+
+  const heroBody = !loaded ? `
+      <div class="hero-count">…</div>
+      <div class="hero-label">loading</div>` :
+    due > 0 ? `
+      <div class="hero-count">${due}</div>
+      <div class="hero-label">${due === 1 ? 'card to review' : 'cards to review'}</div>` : `
+      <div class="empty-emoji">✅</div>
+      <div class="hero-label">All caught up</div>`;
+
+  const studyLabel = !loaded ? 'Study'
+    : due > 0 ? `Study · ${due} card${due === 1 ? '' : 's'}`
+    : 'Nothing due right now';
+
+  const segbar = totalCards > 0 ? `
+    <div class="segbar">
+      <div class="segbar-seg new"      style="flex:${newC} 0 auto"></div>
+      <div class="segbar-seg learning" style="flex:${lrn} 0 auto"></div>
+      <div class="segbar-seg learned"  style="flex:${lnd} 0 auto"></div>
+    </div>
+    <div class="seglegend">
+      <span><b>${newC}</b> new</span>
+      <span><b>${lrn}</b> learning</span>
+      <span><b>${lnd}</b> learned</span>
+    </div>` : '';
 
   return `
-  <div class="screen screen--tabbed">
+  <div class="screen screen--composer">
     <div class="topbar">
       <h1 style="flex:1">Vocab</h1>
       <button class="btn-ghost" style="color:var(--text-muted);font-size:var(--fs-xs)" data-action="logout">Log out</button>
     </div>
 
-    <div class="stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:1rem">
-      <div class="card" style="text-align:center;padding:0.6rem 0.25rem">
-        <div style="font-size:1.4rem;font-weight:700;color:var(--due)">${due}</div>
-        <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase">Due</div>
-      </div>
-      <div class="card" style="text-align:center;padding:0.6rem 0.25rem">
-        <div style="font-size:1.4rem;font-weight:700">${newC}</div>
-        <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase">New</div>
-      </div>
-      <div class="card" style="text-align:center;padding:0.6rem 0.25rem">
-        <div style="font-size:1.4rem;font-weight:700;color:var(--learning)">${lrn}</div>
-        <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase">Learning</div>
-      </div>
-      <div class="card" style="text-align:center;padding:0.6rem 0.25rem">
-        <div style="font-size:1.4rem;font-weight:700;color:var(--learned)">${lnd}</div>
-        <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase">Learned</div>
-      </div>
+    <div class="hero">
+      ${heroBody}
+      <button class="btn btn-primary btn-block" style="margin-top:var(--sp-5)" data-action="start-study" ${!due ? 'disabled' : ''}>
+        ${studyLabel}
+      </button>
     </div>
 
-    <button class="btn btn-primary btn-block" data-action="start-study" ${!due || due === 0 ? 'disabled' : ''}>
-      Study${due ? ` · ${due} cards` : ''}
-    </button>
+    ${segbar}
 
-    <div class="section-title" style="margin-top:1.25rem">Recently added</div>
+    <div class="section-title">Recently added</div>
     <div class="list" id="recent-list">${buildRecentListHtml()}</div>
 
     <div class="composer">

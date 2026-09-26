@@ -57,6 +57,7 @@ const state = {
   studyIndex: 0,
   revealStep: 0,   // 0=word 1=examples 2=explanation 3=translation
   sessionRated: 0,
+  sessionTotal: 0, // fixed once when the session's due cards are first fetched
   // cards list
   listCategory: null,
   listCards: [],
@@ -139,6 +140,7 @@ async function loadStudy() {
     state.studyIndex = 0;
     state.revealStep = 0;
     state.sessionRated = 0;
+    state.sessionTotal = state.dueCards.length; // fixed for the whole session, not recomputed per render
   }
 }
 async function loadCards() { state.listCards = await api.list(state.listCategory); }
@@ -320,10 +322,23 @@ function renderRecentList() {
   if (el) el.innerHTML = buildRecentListHtml();
 }
 
+// Mirrors the interval arithmetic in backend/app/services/srs_service.py::
+// compute_next_review (kept in sync by hand — this is only a client-side
+// preview label for the rating buttons; the server response is always the
+// actual source of truth for what a rating does to the card).
+function previewIntervalDays(card, rating) {
+  if (rating === 'again') return 1;
+  if (card.repetitions === 0) return 1;
+  if (card.repetitions === 1) return 6;
+  return Math.round(card.interval_days * card.ease_factor);
+}
+
+function intervalLabel(days) { return `${days}d`; }
+
 // ── View: Study ────────────────────────────────────────────────────────────
 function viewStudy() {
   const cards = state.dueCards;
-  const total = cards.length + state.sessionRated;
+  const total = state.sessionTotal;
   const done  = state.sessionRated;
 
   if (cards.length === 0) {
@@ -340,7 +355,7 @@ function viewStudy() {
 
   const card = cards[state.studyIndex];
   const step = state.revealStep;
-  const pct  = Math.round((done / total) * 100);
+  const pct  = total > 0 ? Math.round((done / total) * 100) : 0;
 
   const examplesHtml = step >= 1 ? `
     <div class="study-section examples">
@@ -365,9 +380,15 @@ function viewStudy() {
 
   const ratingHtml = step >= 3 ? `
     <div class="rating-row">
-      <button class="btn rating-again"  data-action="rate" data-rating="again">Again</button>
-      <button class="btn rating-good"   data-action="rate" data-rating="good">Good</button>
-      <button class="btn rating-easy"   data-action="rate" data-rating="easy">Easy</button>
+      <button class="btn rating-btn rating-again" data-action="rate" data-rating="again">
+        <span>Again</span><span class="rating-btn-sub">${intervalLabel(previewIntervalDays(card, 'again'))}</span>
+      </button>
+      <button class="btn rating-btn rating-good" data-action="rate" data-rating="good">
+        <span>Good</span><span class="rating-btn-sub">${intervalLabel(previewIntervalDays(card, 'good'))}</span>
+      </button>
+      <button class="btn rating-btn rating-easy" data-action="rate" data-rating="easy">
+        <span>Easy</span><span class="rating-btn-sub">${intervalLabel(previewIntervalDays(card, 'easy'))}</span>
+      </button>
     </div>` : '';
 
   return `
@@ -377,7 +398,7 @@ function viewStudy() {
       <span class="progress-text">${done}/${total}</span>
     </div>
 
-    <div class="study-word">${esc(card.word)}</div>
+    <div class="study-word" data-action="view-studied-card">${esc(card.word)}</div>
     ${examplesHtml}
     ${explanationHtml}
     ${translationHtml}
@@ -591,6 +612,10 @@ async function handleClick(e) {
 
       case 'rate':           await doRate(el.dataset.rating); break;
 
+      case 'view-studied-card':
+        openDetail(state.dueCards[state.studyIndex]);
+        return;
+
       case 'filter': {
         const cat = el.dataset.cat || null;
         state.listCategory = cat;
@@ -719,12 +744,14 @@ function dismissAdd(localId) {
 
 async function doRate(rating) {
   const card = state.dueCards[state.studyIndex];
+  const wasLearned = card.category === 'learned';
   await api.review(card.id, rating);
   state.dueCards.splice(state.studyIndex, 1);
   state.sessionRated++;
   state.revealStep = 0;
   if (state.studyIndex >= state.dueCards.length) state.studyIndex = 0;
   render();
+  if (rating === 'again' && wasLearned) showToast('back to learning', 'info');
 }
 
 function hasUnsavedEdits() {

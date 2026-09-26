@@ -64,6 +64,8 @@ const state = {
   // card detail
   detailCard: null,
   detailEdits: {},
+  editingFields: {},   // { [field]: true } — fields switched to inline edit mode for this visit
+  detailMenuOpen: false,
   // home: recently-added cards, optimistic in-flight/failed adds prepended
   recentCards: [],
   pendingAdds: [], // { localId, word, status: 'pending'|'error', error? }
@@ -93,6 +95,15 @@ function replaceRoute(view, payload = {}) {
 function goTab(view) {
   const payload = view === 'cards' ? { listCategory: null } : {};
   replaceRoute(view, payload);
+}
+
+function openDetail(card) {
+  pushRoute('detail', {
+    detailCard: card,
+    detailEdits: {},
+    editingFields: {},
+    detailMenuOpen: false,
+  });
 }
 
 window.addEventListener('popstate', (e) => {
@@ -448,45 +459,65 @@ function viewDetail() {
   const c = state.detailCard;
   if (!c) return '<div class="screen"><p style="padding:2rem">Loading…</p></div>';
 
+  const isDirty = Object.keys(state.detailEdits).length > 0;
+
+  // Read mode by default; tapping a field's text switches it (permanently,
+  // for the rest of this visit) into an editable textarea — see handleClick's
+  // 'edit-field' case for why there's no auto-revert-to-read on blur.
   const field = (key, label) => {
     const val = state.detailEdits[key] ?? c[key];
+    const editing = !!state.editingFields[key];
+    const body = editing
+      ? `<textarea rows="2" data-field="${key}" class="input" autofocus>${esc(val)}</textarea>`
+      : `<div class="detail-field-body" data-action="edit-field" data-field="${key}">${esc(val)}</div>`;
     return `
-    <div class="field-block">
+    <div class="detail-field">
       <div class="detail-field-head">
         <div class="detail-field-label">${label}</div>
-        <button class="btn btn-ghost btn-sm" data-action="regen-field" data-field="${key}">↺ Regen</button>
+        <button class="btn-icon" data-action="regen-field" data-field="${key}" aria-label="Regenerate ${label}">
+          <span id="spin-${key}" class="regen-icon">↺</span>
+        </button>
       </div>
-      <div style="position:relative">
-        <textarea rows="2" data-field="${key}" class="input">${esc(val)}</textarea>
-        <div class="spinner" id="spin-${key}" style="display:none;position:absolute;right:0.65rem;top:0.65rem"></div>
-      </div>
+      ${body}
     </div>`;
   };
+
+  const menu = state.detailMenuOpen ? `
+    <div class="sheet-backdrop" data-action="close-menu"></div>
+    <div class="sheet">
+      <button class="sheet-action" data-action="regen-all">↺ Regenerate all</button>
+      <button class="sheet-action danger" data-action="delete-card">Delete card</button>
+      <button class="sheet-action cancel" data-action="close-menu">Cancel</button>
+    </div>` : '';
 
   return `
   <div class="screen">
     <div class="topbar">
       <button class="btn-icon" data-action="back">←</button>
       <h1>${esc(c.word)}</h1>
-      <button class="btn-ghost" style="color:var(--danger)" data-action="delete-card">Delete</button>
+      <button class="btn-icon" data-action="open-menu">⋯</button>
     </div>
 
-    <div class="card" style="margin-bottom:1rem">
-      <div class="field-label" style="margin-bottom:0.25rem">Status</div>
-      <span class="dot dot-${c.category}" style="display:inline-block;margin-right:6px"></span>${c.category}
+    <div class="detail-word">${esc(c.word)}</div>
+
+    ${field('translation',  'Translation')}
+    ${field('explanation',  'Explanation')}
+    ${field('example_1',    'Example 1')}
+    ${field('example_2',    'Example 2')}
+
+    <div class="detail-meta">
+      <span class="dot dot-${c.category}" style="display:inline-block;margin-right:6px"></span><b>${c.category}</b>
       ${c.next_review_at ? ` · next ${fmtDate(c.next_review_at)}` : ''}
       · interval ${c.interval_days}d · ease ${c.ease_factor.toFixed(2)}
     </div>
 
-    ${field('example_1',   'Example 1')}
-    ${field('example_2',   'Example 2')}
-    ${field('explanation', 'Explanation (simple English)')}
-    ${field('translation', 'Russian translation')}
+    ${isDirty ? `
+    <div class="save-bar">
+      <button class="btn btn-secondary" data-action="discard-edits">Discard</button>
+      <button class="btn btn-primary" data-action="save-card">Save</button>
+    </div>` : ''}
 
-    <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
-      <button class="btn btn-secondary" style="flex:1" data-action="regen-all">↺ Regenerate all</button>
-      <button class="btn btn-primary" style="flex:1" data-action="save-card">Save</button>
-    </div>
+    ${menu}
   </div>`;
 }
 
@@ -545,9 +576,9 @@ async function handleClick(e) {
         replaceRoute('auth', { authMode: 'login' });
         break;
 
-      case 'tab':            goTab(el.dataset.view); break;
+      case 'tab':            if (confirmLeaveIfDirty()) goTab(el.dataset.view); break;
       case 'start-study':    goTab('study'); break;
-      case 'back':           history.back(); break;
+      case 'back':           if (confirmLeaveIfDirty()) history.back(); break;
 
       case 'add-word':       doAddWord(); return; // sync: clears+refocuses input immediately, add runs in background
       case 'retry-add':      retryAdd(Number(el.dataset.localId)); return;
@@ -570,14 +601,29 @@ async function handleClick(e) {
 
       case 'open-card': {
         const card = await api.get(el.dataset.id);
-        pushRoute('detail', { detailCard: card, detailEdits: {} });
+        openDetail(card);
         return;
       }
 
+      case 'edit-field':
+        state.editingFields[el.dataset.field] = true;
+        render();
+        document.querySelector(`textarea[data-field="${el.dataset.field}"]`)?.focus();
+        return;
+
+      case 'discard-edits':
+        state.detailEdits = {};
+        state.editingFields = {};
+        render();
+        return;
+
+      case 'open-menu':      state.detailMenuOpen = true;  render(); return;
+      case 'close-menu':     state.detailMenuOpen = false; render(); return;
+
       case 'save-card':      await doSaveCard(); break;
       case 'regen-field':    await doRegenField(el.dataset.field); break;
-      case 'regen-all':      await doRegenAll(); break;
-      case 'delete-card':    await doDeleteCard(); break;
+      case 'regen-all':      state.detailMenuOpen = false; await doRegenAll(); break;
+      case 'delete-card':    state.detailMenuOpen = false; await doDeleteCard(); break;
     }
   } catch (err) {
     showToast(err.message, 'error');
@@ -636,7 +682,7 @@ function startAdd(word) {
     renderRecentList();
     showToast(`"${card.word}" added`, 'success', {
       actionLabel: 'Edit',
-      onAction: () => pushRoute('detail', { detailCard: card, detailEdits: {} }),
+      onAction: () => openDetail(card),
     });
   }).catch(err => {
     const entry = state.pendingAdds.find(p => p.localId === localId);
@@ -657,7 +703,7 @@ function retryAdd(localId) {
     renderRecentList();
     showToast(`"${card.word}" added`, 'success', {
       actionLabel: 'Edit',
-      onAction: () => pushRoute('detail', { detailCard: card, detailEdits: {} }),
+      onAction: () => openDetail(card),
     });
   }).catch(err => {
     entry.status = 'error';
@@ -681,6 +727,16 @@ async function doRate(rating) {
   render();
 }
 
+function hasUnsavedEdits() {
+  return state.view === 'detail' && Object.keys(state.detailEdits).length > 0;
+}
+
+function confirmLeaveIfDirty() {
+  return !hasUnsavedEdits() || confirm('Discard unsaved changes to this card?');
+}
+
+const REGEN_FIELDS = ['example_1', 'example_2', 'explanation', 'translation'];
+
 async function doSaveCard() {
   const edits = state.detailEdits;
   if (Object.keys(edits).length === 0) { showToast('Nothing to save'); return; }
@@ -688,6 +744,7 @@ async function doSaveCard() {
   try {
     state.detailCard = await api.update(state.detailCard.id, edits);
     state.detailEdits = {};
+    state.editingFields = {};
     hideLoading();
     render();
     showToast('Saved!', 'success');
@@ -697,28 +754,46 @@ async function doSaveCard() {
   }
 }
 
+function offerUndo(previousValues) {
+  showToast('Regenerated', 'success', {
+    actionLabel: 'Undo',
+    duration: 10000,
+    onAction: async () => {
+      try {
+        state.detailCard = await api.update(state.detailCard.id, previousValues);
+        render();
+        showToast('Reverted', 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    },
+  });
+}
+
 async function doRegenField(field) {
   const spin = document.getElementById(`spin-${field}`);
-  if (spin) spin.style.display = 'block';
+  spin?.classList.add('spinning');
+  const previousValues = { [field]: state.detailCard[field] };
   try {
-    const updated = await api.regen(state.detailCard.id, field);
-    state.detailCard = updated;
+    state.detailCard = await api.regen(state.detailCard.id, field);
     delete state.detailEdits[field];
   } finally {
-    if (spin) spin.style.display = 'none';
+    spin?.classList.remove('spinning');
   }
   render();
-  showToast('Regenerated!', 'success');
+  offerUndo(previousValues);
 }
 
 async function doRegenAll() {
+  const previousValues = Object.fromEntries(REGEN_FIELDS.map(f => [f, state.detailCard[f]]));
   showLoading('Regenerating…');
   try {
     state.detailCard = await api.regen(state.detailCard.id, null);
     state.detailEdits = {};
+    state.editingFields = {};
     hideLoading();
     render();
-    showToast('Regenerated!', 'success');
+    offerUndo(previousValues);
   } catch (err) {
     hideLoading();
     throw err;

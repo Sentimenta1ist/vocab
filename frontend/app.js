@@ -574,6 +574,7 @@ function handleInput(e) {
 function handleKeydown(e) {
   if (e.key !== 'Enter') return;
   if (e.target.id === 'add-input') { doAddWord(); return; }
+  if (e.target.id === 'auth-email') { document.getElementById('auth-password')?.focus(); return; }
   if (e.target.id === 'auth-password') { doAuth(); return; }
 }
 
@@ -835,16 +836,21 @@ async function doDeleteCard() {
 }
 
 // ── UI helpers ─────────────────────────────────────────────────────────────
+const TOAST_ICONS = { success: '✓', error: '⚠', info: 'ℹ' };
+
 function showToast(msg, type = 'info', opts = {}) {
   document.querySelectorAll('.toast-stack').forEach(t => t.remove());
   const { actionLabel, onAction, duration = actionLabel ? 5000 : 3000 } = opts;
 
+  const hasTabbar  = ['home', 'study', 'cards'].includes(state.view);
+  const hasSaveBar = !!document.querySelector('.save-bar');
+
   const stack = document.createElement('div');
-  stack.className = `toast-stack ${['home', 'study', 'cards'].includes(state.view) ? '' : 'toast-stack--flush'}`;
+  stack.className = `toast-stack ${hasTabbar ? '' : 'toast-stack--flush'} ${hasSaveBar ? 'toast-stack--above-savebar' : ''}`;
 
   const t = document.createElement('div');
   t.className = `toast toast-${type}`;
-  t.innerHTML = `<span class="toast-msg">${esc(msg)}</span>` +
+  t.innerHTML = `<span class="toast-icon">${TOAST_ICONS[type] || ''}</span><span class="toast-msg">${esc(msg)}</span>` +
     (actionLabel ? `<button class="toast-action">${esc(actionLabel)}</button>` : '');
   stack.appendChild(t);
   document.body.appendChild(stack);
@@ -895,8 +901,26 @@ function fmtDate(iso) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+// ── Keyboard offset ──────────────────────────────────────────────────────
+// iOS resizes the visual viewport (not the layout viewport) when the
+// keyboard opens, so plain `position: fixed; bottom: 0` bars can end up
+// hidden behind it. Track the gap and expose it as --kb-offset, which the
+// tabbar/composer/toast-stack CSS already adds into their `bottom` values.
+function initKeyboardOffsetFix() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const update = () => {
+    const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty('--kb-offset', `${offset}px`);
+  };
+  vv.addEventListener('resize', update);
+  vv.addEventListener('scroll', update);
+  update();
+}
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 initEvents();
+initKeyboardOffsetFix();
 
 const initialView = getToken() ? 'home' : 'auth';
 history.replaceState({ view: initialView, payload: { authMode: 'login' } }, '', `#${initialView}`);

@@ -582,6 +582,12 @@ textarea.input { resize: vertical; min-height: 68px; font-family: inherit; }
   bottom: calc(var(--safe-b) + var(--kb-offset) + var(--sp-3));
 }
 
+/* Detail's sticky save-bar sits in normal flow (not fixed), so a fixed toast
+   needs its own clearance to avoid sitting on top of the Save/Discard buttons */
+.toast-stack.toast-stack--above-savebar {
+  bottom: calc(var(--safe-b) + var(--kb-offset) + 76px);
+}
+
 .toast {
   display: flex;
   align-items: center;

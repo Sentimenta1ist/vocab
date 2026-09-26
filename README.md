@@ -2,7 +2,7 @@
 
 Personal English vocabulary app with AI-generated cards and spaced repetition (SM-2).
 
-**Stack:** FastAPI · PostgreSQL · Groq (OpenAI-compatible LLM) · PWA (installable on iPhone)
+**Stack:** FastAPI · PostgreSQL · Gemini 2.5 Flash · PWA (installable on iPhone)
 
 ---
 
@@ -28,10 +28,9 @@ In Coolify → Environment Variables, add every key from `.env.example`:
 
 | Variable | Required | Notes |
 |---|---|---|
-| `GROQ_API_KEY` | ✅ | From [Groq Console](https://console.groq.com/keys) |
+| `GOOGLE_API_KEY` | ✅ | From [Google AI Studio](https://aistudio.google.com/app/apikey) |
 | `POSTGRES_PASSWORD` | ✅ | Strong random string |
 | `DATABASE_URL` | ✅ | `postgresql+asyncpg://vocab:<password>@postgres:5432/vocab` |
-| `LLM_MODEL` | — | Default `llama-3.1-8b-instant` |
 | `TIMEZONE` | — | Default `Europe/Dublin` |
 | `NEW_CARDS_DAILY_CAP` | — | Default `20` |
 | `POSTGRES_DB` | — | Default `vocab` |
@@ -56,7 +55,7 @@ Alembic migrations run automatically on every container start (`entrypoint.sh` r
 
 ```bash
 cp .env.example .env
-# Edit .env — set GROQ_API_KEY and POSTGRES_PASSWORD
+# Edit .env — set GOOGLE_API_KEY and POSTGRES_PASSWORD
 
 docker compose up --build
 ```
@@ -91,7 +90,7 @@ backend/
       card_service.py   # Business logic
       srs_service.py    # SM-2 algorithm
     llm/
-      client.py      # OpenAI-compatible LLM client (Groq)
+      gemini.py      # Gemini structured-output client
   migrations/        # Alembic
 frontend/            # Vanilla JS PWA (no build step)
 Dockerfile           # Multi-stage, Python 3.12-slim
@@ -106,7 +105,7 @@ docker-compose.yml   # app + postgres services
 | GET | `/api/cards/stats` | Category counts + due count |
 | GET | `/api/cards/due` | Cards due for study (review + capped new) |
 | GET | `/api/cards?category=` | List cards, optional filter |
-| POST | `/api/cards` | Add word → triggers LLM generation |
+| POST | `/api/cards` | Add word → triggers Gemini generation |
 | GET | `/api/cards/{id}` | Get single card |
 | PATCH | `/api/cards/{id}` | Edit fields manually |
 | POST | `/api/cards/{id}/regenerate` | Regen whole card or one field |

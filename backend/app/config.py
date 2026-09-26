@@ -22,12 +22,8 @@ class Settings(BaseSettings):
             if v.startswith(old):
                 return new + v[len(old):]
         return v
-    groq_api_key: str
+    google_api_key: str
     jwt_secret: str
-
-    # LLM provider (OpenAI-compatible)
-    llm_base_url: str = "https://api.groq.com/openai/v1"
-    llm_model: str = "llama-3.1-8b-instant"
 
     # Optional with defaults
     timezone: str = "Europe/Dublin"

@@ -6,7 +6,7 @@ alembic==1.14.0
 pydantic==2.10.4
 pydantic[email]==2.10.4
 pydantic-settings==2.7.1
-openai>=1.0.0
+google-genai>=1.0.0
 httpx==0.28.1
 tzdata>=2024.1
 # Auth

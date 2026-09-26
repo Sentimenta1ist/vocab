@@ -183,7 +183,7 @@ function viewAuth() {
   return `
   <div class="screen auth-screen">
     <div style="padding:0 0 2rem">
-      <h1 class="auth-title">Vocab</h1>
+      <h1 class="auth-title brand">Vocab</h1>
       <p class="auth-sub">English vocabulary · spaced repetition</p>
     </div>
 
@@ -254,7 +254,7 @@ function viewHome() {
   return `
   <div class="screen screen--composer">
     <div class="topbar">
-      <h1 style="flex:1">Vocab</h1>
+      <h1 class="brand" style="flex:1">Vocab</h1>
       <button class="btn-ghost" style="color:var(--text-muted);font-size:var(--fs-xs)" data-action="logout">Log out</button>
     </div>
 

@@ -7,6 +7,8 @@ function clearToken()        { localStorage.removeItem(TOKEN_KEY); }
 
 // ── API ────────────────────────────────────────────────────────────────────
 const API = (window.__API_URL__ || '/api').replace(/\/$/, '');
+// Registration is closed unless config.js opts in (the backend enforces it too)
+const ALLOW_REGISTRATION = window.__ALLOW_REGISTRATION__ === true;
 
 async function apiFetch(method, path, body) {
   const opts = { method, headers: {} };
@@ -207,12 +209,12 @@ function viewAuth() {
       </button>
     </div>
 
-    <p class="auth-switch">
+    ${ALLOW_REGISTRATION ? `<p class="auth-switch">
       ${isLogin ? "Don't have an account?" : 'Already have an account?'}
       <button class="btn-ghost" data-action="auth-toggle">
         ${isLogin ? 'Register' : 'Log in'}
       </button>
-    </p>
+    </p>` : ''}
   </div>`;
 }
 

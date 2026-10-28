@@ -1,6 +1,8 @@
 import asyncio
 import logging
+from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from google import genai
@@ -16,6 +18,23 @@ _client: Optional[genai.Client] = None
 
 MODEL = "gemini-2.5-flash"
 TIMEOUT_SECONDS = 45.0
+
+
+# In-process daily budget for Gemini calls. Single uvicorn worker, so a module
+# counter is enough; it resets on restart, which only ever loosens the cap once.
+_usage_day: Optional[str] = None
+_usage_count = 0
+
+
+def _consume_daily_budget() -> None:
+    global _usage_day, _usage_count
+    today = datetime.now(ZoneInfo(settings.timezone)).date().isoformat()
+    if today != _usage_day:
+        _usage_day, _usage_count = today, 0
+    if _usage_count >= settings.daily_llm_limit:
+        logger.warning("Daily LLM limit of %d calls reached", settings.daily_llm_limit)
+        raise HTTPException(status_code=429, detail="Daily AI limit reached. Try again tomorrow.")
+    _usage_count += 1
 
 
 def get_client() -> genai.Client:
@@ -89,6 +108,7 @@ def _single_field_prompt(word: str, field: str) -> str:
 
 async def generate_card(word: str) -> CardContent:
     """Call Gemini to generate a full study card for the given word."""
+    _consume_daily_budget()
     client = get_client()
     prompt = _full_card_prompt(word)
 
@@ -124,6 +144,7 @@ async def generate_card(word: str) -> CardContent:
 
 async def regenerate_field(word: str, field: str) -> str:
     """Call Gemini to regenerate a single card field, returning just the new value."""
+    _consume_daily_budget()
     client = get_client()
     prompt = _single_field_prompt(word, field)
 

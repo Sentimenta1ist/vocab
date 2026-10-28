@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # Comma-separated allowed origins for CORS, e.g. "https://vocab.example.com,https://app.example.com"
     # Use "*" to allow any origin (fine for a personal app behind JWT auth)
     cors_origins: str = "*"
+    # Closed by default: anyone who registers can spend the Gemini key
+    allow_registration: bool = False
+    # Global ceiling on Gemini calls per day (resets at midnight in `timezone`)
+    daily_llm_limit: int = 200
+    # Swagger and the OpenAPI schema are only served when true
+    enable_docs: bool = False
 
 
 settings = Settings()

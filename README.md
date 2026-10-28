@@ -93,6 +93,14 @@ Environment variables (see `.env.example`):
 | `TIMEZONE` | no | `Europe/Dublin` |
 | `NEW_CARDS_DAILY_CAP` | no | `20` |
 | `PORT` | no | `8000` |
+| `ALLOW_REGISTRATION` | no | `false` (`/api/auth/register` returns 403; the frontend hides the switch unless `config.js` sets `window.__ALLOW_REGISTRATION__ = true`) |
+| `DAILY_LLM_LIMIT` | no | `200` Gemini calls per day for the whole service |
+| `ENABLE_DOCS` | no | `false` (Swagger at `/docs`) |
+| `CORS_ORIGINS` | no | `*`; credentials are never allowed |
+
+Rate limits per client IP (`CF-Connecting-IP` behind Cloudflare): login 10/min, register 5/min, card creation and regeneration 20/min each.
+
+Tests: `pip install -r backend/requirements-dev.txt && cd backend && pytest`.
 
 Backend only, without rebuilding the image (needs a reachable Postgres whose host in `DATABASE_URL` is not the compose service name; settings are read from `.env` in the working directory or from the environment):
 

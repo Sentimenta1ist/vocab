@@ -1,11 +1,12 @@
 from typing import Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
+from app.limiter import limiter
 from app.models import User
 from app.schemas import CardCreate, CardResponse, CardUpdate, RegenerateRequest, StatsResponse
 from app.services import card_service
@@ -40,7 +41,9 @@ async def list_cards(
 
 
 @router.post("", response_model=CardResponse, status_code=201)
+@limiter.limit("20/minute")
 async def create_card(
+    request: Request,
     body: CardCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -68,7 +71,9 @@ async def update_card(
 
 
 @router.post("/{card_id}/regenerate", response_model=CardResponse)
+@limiter.limit("20/minute")
 async def regenerate_card(
+    request: Request,
     card_id: UUID,
     body: RegenerateRequest,
     db: AsyncSession = Depends(get_db),

@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, LargeBinary, String, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -47,6 +47,17 @@ class Card(Base):
 
     category: Mapped[str] = mapped_column(String, nullable=False, default="new")
 
+    # Where the word came from (all NULL for cards added by hand). Today only 'series' (Series Vocab extension).
+    source_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    source_title: Mapped[str | None] = mapped_column(String, nullable=True)
+    source_season: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_episode: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_timecode_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_line: Mapped[str | None] = mapped_column(String, nullable=True)
+    # {"before": [...], "after": [...], "picked": "...", "kind": "phrasal verb", "url": "..."}
+    source_context: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    has_image: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+
     # SM-2 fields
     ease_factor: Mapped[float] = mapped_column(Float, nullable=False, default=2.5)
     interval_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -64,3 +75,17 @@ class Card(Base):
 
     def touch(self) -> None:
         self.updated_at = datetime.now(timezone.utc)
+
+
+class CardImage(Base):
+    """Screenshot for a card, kept out of `cards` so list queries never load the bytes."""
+    __tablename__ = "card_images"
+
+    card_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("cards.id", ondelete="CASCADE"), primary_key=True
+    )
+    mime: Mapped[str] = mapped_column(String, nullable=False, default="image/jpeg")
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )

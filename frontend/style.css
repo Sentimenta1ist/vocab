@@ -720,3 +720,11 @@ textarea.input { resize: vertical; min-height: 68px; font-family: inherit; }
 /* ── Animations ───────────────────────────────────────────────── */
 @keyframes fadeIn  { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* ── Cards from a series ───────────────────────────────────────────────── */
+.series-shot {
+  display: block; width: 100%; height: auto; margin: 0.4rem 0 0.6rem;
+  border-radius: 10px; background: #000; aspect-ratio: 16 / 9; object-fit: cover;
+}
+.series-line { font-style: italic; opacity: 0.9; }
+.detail-word + .series-source { margin-bottom: 1rem; }

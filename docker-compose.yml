@@ -9,6 +9,9 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       TIMEZONE: ${TIMEZONE:-Europe/Dublin}
       NEW_CARDS_DAILY_CAP: ${NEW_CARDS_DAILY_CAP:-20}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
+      INGEST_TOKEN: ${INGEST_TOKEN:-}
+      INGEST_USER_EMAIL: ${INGEST_USER_EMAIL:-}
       PORT: ${PORT:-8000}
       FRONTEND_DIR: /app/frontend
     depends_on:

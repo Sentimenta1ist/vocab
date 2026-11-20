@@ -13,6 +13,7 @@ from app.config import settings
 from app.limiter import limiter
 from app.routes.auth import router as auth_router
 from app.routes.cards import router as cards_router
+from app.routes.ingest import router as ingest_router
 from app.routes.review import router as review_router
 
 logging.basicConfig(
@@ -51,6 +52,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api")
 app.include_router(cards_router, prefix="/api")
 app.include_router(review_router, prefix="/api")
+app.include_router(ingest_router, prefix="/api")
 
 
 @app.get("/health", tags=["health"])

@@ -166,6 +166,49 @@ function render() {
     case 'detail': html = viewDetail(); break;
   }
   root.innerHTML = html + (showTabbar ? renderTabbar() : '');
+  hydrateCardImages(root);
+}
+
+// ── Cards from a series (Series Vocab extension) ───────────────────────────
+// The screenshot replaces the first example; the line it was said in sits under it.
+function fmtTimecode(ms) {
+  if (ms == null) return '';
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  return (h ? `${h}:${String(m).padStart(2, '0')}` : `${m}`) + `:${String(r).padStart(2, '0')}`;
+}
+
+function seriesSourceLabel(c) {
+  const ep = c.source_season != null ? ` · S${c.source_season}E${c.source_episode ?? '?'}` : '';
+  const tc = c.source_timecode_ms != null ? ` · ${fmtTimecode(c.source_timecode_ms)}` : '';
+  return `${esc(c.source_title || 'Series')}${ep}${tc}`;
+}
+
+function seriesExampleHtml(c) {
+  const picked = c.source_context?.picked || c.word;
+  return `
+    <div class="study-section examples series-source">
+      <div class="study-section-label">${seriesSourceLabel(c)}</div>
+      ${c.has_image ? `<img class="series-shot" data-card-img="${c.id}" alt="Frame from ${esc(c.source_title || 'the series')}">` : ''}
+      <p class="series-line">${highlight(c.source_line || c.example_1, picked)}</p>
+      <p>${highlight(c.example_2, c.word)}</p>
+    </div>`;
+}
+
+const imageUrls = new Map();   // card id -> object URL (fetched once with the bearer token)
+async function hydrateCardImages(root) {
+  for (const img of root.querySelectorAll('img[data-card-img]')) {
+    const id = img.dataset.cardImg;
+    if (imageUrls.has(id)) { img.src = imageUrls.get(id); continue; }
+    try {
+      const res = await fetch(`${API}/cards/${id}/image`, { headers: { Authorization: `Bearer ${getToken()}` } });
+      if (!res.ok) throw new Error(res.statusText);
+      const url = URL.createObjectURL(await res.blob());
+      imageUrls.set(id, url);
+      if (img.isConnected) img.src = url;
+    } catch {
+      img.remove();
+    }
+  }
 }
 
 function renderTabbar() {
@@ -359,12 +402,12 @@ function viewStudy() {
   const step = state.revealStep;
   const pct  = total > 0 ? Math.round((done / total) * 100) : 0;
 
-  const examplesHtml = step >= 1 ? `
+  const examplesHtml = step >= 1 ? (card.source_type === 'series' ? seriesExampleHtml(card) : `
     <div class="study-section examples">
       <div class="study-section-label">Examples</div>
       <p>${highlight(card.example_1, card.word)}</p>
       <p>${highlight(card.example_2, card.word)}</p>
-    </div>` : '';
+    </div>`) : '';
 
   const explanationHtml = step >= 2 ? `
     <div class="study-section">
@@ -522,6 +565,7 @@ function viewDetail() {
     </div>
 
     <div class="detail-word">${esc(c.word)}</div>
+    ${c.source_type === 'series' ? seriesExampleHtml(c) : ''}
 
     ${field('translation',  'Translation')}
     ${field('explanation',  'Explanation')}

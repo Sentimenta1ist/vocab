@@ -68,3 +68,8 @@ def test_daily_llm_limit_resets_next_day(monkeypatch):
     monkeypatch.setattr(gemini, "_usage_count", 1)
     gemini._consume_daily_budget()
     assert gemini._usage_count == 1
+
+
+def test_ingest_disabled_without_token(client):
+    resp = client.post("/api/ingest/series", json={}, headers={"X-Ingest-Token": "x"})
+    assert resp.status_code in (404, 422)

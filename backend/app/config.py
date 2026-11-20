@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     daily_llm_limit: int = 200
     # Swagger and the OpenAPI schema are only served when true
     enable_docs: bool = False
+    # Card intake from the Series Vocab extension (POST /api/ingest/series, header X-Ingest-Token).
+    # Empty token = intake disabled. Cards are created for the user with this email.
+    ingest_token: str = ""
+    ingest_user_email: str = ""
+    ingest_max_image_bytes: int = 1_500_000
 
 
 settings = Settings()

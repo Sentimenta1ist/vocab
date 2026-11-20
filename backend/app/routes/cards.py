@@ -1,13 +1,13 @@
 from typing import Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
 from app.limiter import limiter
-from app.models import User
+from app.models import CardImage, User
 from app.schemas import CardCreate, CardResponse, CardUpdate, RegenerateRequest, StatsResponse
 from app.services import card_service
 from app.services.auth_service import get_current_user
@@ -89,3 +89,16 @@ async def delete_card(
     current_user: User = Depends(get_current_user),
 ) -> None:
     await card_service.delete_card(db, card_id, current_user.id)
+
+
+@router.get("/{card_id}/image")
+async def get_card_image(
+    card_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    card = await card_service.get_card(db, card_id, current_user.id)  # 404 if not the user's card
+    img = await db.get(CardImage, card.id)
+    if img is None:
+        raise HTTPException(status_code=404, detail="No image for this card")
+    return Response(content=img.data, media_type=img.mime, headers={"Cache-Control": "private, max-age=86400"})

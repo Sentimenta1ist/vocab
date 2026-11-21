@@ -150,3 +150,9 @@ def test_deleting_card_deletes_image(client):
     card = next(c for c in client.get("/api/cards", headers=h).json() if c["word"] == "pick up the pace")
     assert client.delete(f"/api/cards/{card['id']}", headers=h).status_code == 204
     assert sql("SELECT count(*) AS n FROM card_images", fetch=True)[0]["n"] == 0
+
+
+def test_ingest_words_lists_own_words(client):
+    assert client.get("/api/ingest/words").status_code == 401
+    words = client.get("/api/ingest/words", headers={"X-Ingest-Token": TOKEN}).json()
+    assert "pick up the pace" in words and words == sorted(words)

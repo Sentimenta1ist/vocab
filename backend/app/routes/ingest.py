@@ -51,6 +51,18 @@ def _decode_image(b64: str) -> bytes:
     return raw
 
 
+@router.get("/words", response_model=list[str])
+@limiter.limit("60/minute")
+async def ingest_words(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(ingest_user),
+) -> list[str]:
+    """Every word the ingest user already has, so the extension does not offer them again."""
+    rows = await db.execute(select(Card.word).where(Card.user_id == user.id).order_by(Card.word))
+    return list(rows.scalars())
+
+
 @router.post("/series", response_model=CardResponse, status_code=201)
 @limiter.limit("60/minute")
 async def ingest_series(
